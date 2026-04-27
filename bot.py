@@ -1533,33 +1533,30 @@ if __name__ == "__main__":
     print(f"👑 Админы: {ADMIN_IDS}")
     print(f"🕐 Рабочее время: {WORK_START_HOUR}:00 - {WORK_END_HOUR}:00")
     print(f"📅 Календарь доступен на 2 месяца вперёд")
-    print(f"📢 Рассылка: /news [текст]")
     print(f"📁 Данные хранятся в: {DATA_DIR}")
     
-    # Проверка прав на запись
+    # === ИНИЦИАЛИЗАЦИЯ ФАЙЛОВ ===
+    # Принудительно создаём файлы, если их нет
     try:
         if not os.path.exists(APPOINTMENTS_FILE):
             with open(APPOINTMENTS_FILE, 'w', encoding='utf-8') as f:
                 json.dump({}, f)
             print(f"✅ Файл {APPOINTMENTS_FILE} создан")
-        else:
-            with open(APPOINTMENTS_FILE, 'a', encoding='utf-8') as f:
-                pass
-            print(f"✅ Файл {APPOINTMENTS_FILE} доступен для записи")
         
         if not os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'w', encoding='utf-8') as f:
                 json.dump({}, f)
             print(f"✅ Файл {USERS_FILE} создан")
         
-    except PermissionError:
-        print(f"❌ Нет прав на запись в файлы")
+        # Проверяем, что файлы читаются
+        test_appointments = load_appointments()
+        test_users = load_users()
+        print(f"✅ Файлы данных проверены (записей: {len(test_appointments)}, пользователей: {len(test_users)})")
+        
     except Exception as e:
-        print(f"⚠️ Предупреждение: {e}")
+        print(f"❌ Ошибка инициализации файлов: {e}")
     
-    print("=" * 50)
-    
-    # Очистка старых записей
+    # === ОЧИСТКА СТАРЫХ ЗАПИСЕЙ ===
     appointments = load_appointments()
     today = datetime.now().strftime("%d.%m.%Y")
     cleaned = False
@@ -1573,18 +1570,40 @@ if __name__ == "__main__":
         save_appointments(appointments)
         print("🧹 Очищены старые записи")
     
-    print(f"👥 Пользователей в базе: {len(get_all_users())}")
+    # === ПРЕДВАРИТЕЛЬНЫЙ ПРОГРЕВ БОТА ===
+    # Отправляем тестовый запрос к API, чтобы убедиться, что бот работает
+    print("🔍 Проверка соединения с Telegram API...")
+    try:
+        me = bot.get_me()
+        print(f"✅ Бот @{me.username} подключён к Telegram")
+    except Exception as e:
+        print(f"⚠️ Предупреждение при проверке API: {e}")
+        print("⏳ Ожидание 3 секунды перед повторной попыткой...")
+        time.sleep(3)
+        try:
+            me = bot.get_me()
+            print(f"✅ Бот @{me.username} подключён к Telegram (со второй попытки)")
+        except Exception as e2:
+            print(f"❌ Ошибка подключения: {e2}")
     
-    # Запуск планировщика
+    # === ЗАПУСК ПЛАНИРОВЩИКА ===
+    print("🔔 Запуск системы напоминаний...")
     reminder_thread = threading.Thread(target=run_scheduler, daemon=True)
     reminder_thread.start()
     
-    # Запуск бота
+    # Небольшая задержка, чтобы планировщик точно запустился
+    time.sleep(1)
+    print("✅ Система напоминаний запущена")
+    
+    print("=" * 50)
+    
+    # === ЗАПУСК БОТА ===
+    print("🚀 Бот готов к работе!")
+    
     while True:
         try:
-            print("🚀 Бот запущен!")
             bot.infinity_polling(timeout=10, long_polling_timeout=5)
         except Exception as e:
-            print(f"❌ Ошибка: {e}")
-            print("🔄 Перезапуск через 5 секунд...")
+            print(f"❌ Ошибка polling: {e}")
+            print("🔄 Перезапуск polling через 5 секунд...")
             time.sleep(5)
