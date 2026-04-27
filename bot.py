@@ -1529,32 +1529,19 @@ def run_scheduler():
 if __name__ == "__main__":
     print("=" * 50)
     print("🤖 БОТ ЗАПУСКАЕТСЯ...")
-    print(f"⏰ Текущее время: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
-    print(f"👑 Админы: {ADMIN_IDS}")
-    print(f"🕐 Рабочее время: {WORK_START_HOUR}:00 - {WORK_END_HOUR}:00")
-    print(f"📅 Календарь доступен на 2 месяца вперёд")
-    print(f"📁 Данные хранятся в: {DATA_DIR}")
     
     # === ИНИЦИАЛИЗАЦИЯ ФАЙЛОВ ===
-    # Принудительно создаём файлы, если их нет
     try:
-        if not os.path.exists(APPOINTMENTS_FILE):
-            with open(APPOINTMENTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump({}, f)
-            print(f"✅ Файл {APPOINTMENTS_FILE} создан")
+        os.makedirs(DATA_DIR, exist_ok=True)
         
-        if not os.path.exists(USERS_FILE):
-            with open(USERS_FILE, 'w', encoding='utf-8') as f:
-                json.dump({}, f)
-            print(f"✅ Файл {USERS_FILE} создан")
+        for file_path in [APPOINTMENTS_FILE, USERS_FILE]:
+            if not os.path.exists(file_path):
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump({}, f)
         
-        # Проверяем, что файлы читаются
-        test_appointments = load_appointments()
-        test_users = load_users()
-        print(f"✅ Файлы данных проверены (записей: {len(test_appointments)}, пользователей: {len(test_users)})")
-        
+        print(f"✅ Файлы данных готовы")
     except Exception as e:
-        print(f"❌ Ошибка инициализации файлов: {e}")
+        print(f"❌ Ошибка файлов: {e}")
     
     # === ОЧИСТКА СТАРЫХ ЗАПИСЕЙ ===
     appointments = load_appointments()
@@ -1568,42 +1555,74 @@ if __name__ == "__main__":
     
     if cleaned:
         save_appointments(appointments)
-        print("🧹 Очищены старые записи")
     
-    # === ПРЕДВАРИТЕЛЬНЫЙ ПРОГРЕВ БОТА ===
-    # Отправляем тестовый запрос к API, чтобы убедиться, что бот работает
-    print("🔍 Проверка соединения с Telegram API...")
-    try:
-        me = bot.get_me()
-        print(f"✅ Бот @{me.username} подключён к Telegram")
-    except Exception as e:
-        print(f"⚠️ Предупреждение при проверке API: {e}")
-        print("⏳ Ожидание 3 секунды перед повторной попыткой...")
-        time.sleep(3)
-        try:
-            me = bot.get_me()
-            print(f"✅ Бот @{me.username} подключён к Telegram (со второй попытки)")
-        except Exception as e2:
-            print(f"❌ Ошибка подключения: {e2}")
-    
-    # === ЗАПУСК ПЛАНИРОВЩИКА ===
-    print("🔔 Запуск системы напоминаний...")
-    reminder_thread = threading.Thread(target=run_scheduler, daemon=True)
-    reminder_thread.start()
-    
-    # Небольшая задержка, чтобы планировщик точно запустился
-    time.sleep(1)
-    print("✅ Система напоминаний запущена")
-    
+    print(f"👥 Пользователей: {len(get_all_users())}")
+    print(f"📅 Активных записей: {len(get_all_appointments())}")
+    print(f"🕐 Часы работы: {WORK_START_HOUR}:00 - {WORK_END_HOUR}:00")
+    print(f"👑 Админы: {ADMIN_IDS}")
     print("=" * 50)
     
-    # === ЗАПУСК БОТА ===
-    print("🚀 Бот готов к работе!")
+    # === ЗАПУСК ПЛАНИРОВЩИКА ===
+    reminder_thread = threading.Thread(target=run_scheduler, daemon=True)
+    reminder_thread.start()
+    time.sleep(0.5)
+    
+    # === ПРИНУДИТЕЛЬНЫЙ ПРОГРЕВ СОЕДИНЕНИЯ ===
+    print("🔍 Установка соединения с Telegram...")
+    
+    # Удаляем вебхук и ждём
+    for attempt in range(3):
+        try:
+            bot.remove_webhook()
+            time.sleep(1)
+            break
+        except Exception as e:
+            print(f"⚠️ Попытка {attempt + 1}: {e}")
+            time.sleep(2)
+    
+    # Проверяем соединение
+    for attempt in range(3):
+        try:
+            me = bot.get_me()
+            print(f"✅ Бот @{me.username} подключён")
+            break
+        except Exception as e:
+            print(f"⚠️ Попытка {attempt + 1} проверки API: {e}")
+            time.sleep(2)
+    else:
+        print("❌ Не удалось подключиться к Telegram API")
+    
+    # === ДОПОЛНИТЕЛЬНАЯ ЗАДЕРЖКА ===
+    print("⏳ Ожидание 3 секунды для стабилизации...")
+    time.sleep(3)
+    
+    # === ЗАПУСК ===
+    print("🚀 Запуск polling...")
+    
+    # Счётчик перезапусков
+    restart_count = 0
     
     while True:
         try:
-            bot.infinity_polling(timeout=10, long_polling_timeout=5)
+            restart_count += 1
+            print(f"🔄 Polling цикл #{restart_count}")
+            bot.infinity_polling(timeout=10, long_polling_timeout=5, restart_on_change=False)
         except Exception as e:
-            print(f"❌ Ошибка polling: {e}")
-            print("🔄 Перезапуск polling через 5 секунд...")
-            time.sleep(5)
+            error_msg = str(e)
+            print(f"❌ Ошибка polling (цикл #{restart_count}): {error_msg[:200]}")
+            
+            # Если ошибка критическая - ждём дольше
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                print("🔴 Критическая ошибка авторизации. Проверьте токен!")
+                time.sleep(60)
+            elif "409" in error_msg or "Conflict" in error_msg:
+                print("🟡 Конфликт соединений. Сброс webhook...")
+                try:
+                    bot.remove_webhook()
+                    time.sleep(2)
+                except:
+                    pass
+            else:
+                print(f"🔄 Перезапуск через 3 секунды...")
+            
+            time.sleep(3)
