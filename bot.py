@@ -1529,54 +1529,62 @@ def run_scheduler():
 if __name__ == "__main__":
     print("=" * 50)
     print("🤖 БОТ ЗАПУСКАЕТСЯ...")
-    print(f"🕐 Часы работы: {WORK_START_HOUR}:00 - {WORK_END_HOUR}:00")
+    print(f"⏰ Текущее время: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
     print(f"👑 Админы: {ADMIN_IDS}")
+    print(f"🕐 Рабочее время: {WORK_START_HOUR}:00 - {WORK_END_HOUR}:00")
+    print(f"📅 Календарь доступен на 2 месяца вперёд")
+    print(f"📢 Рассылка: /news [текст]")
+    print(f"📁 Данные хранятся в: {DATA_DIR}")
+    
+    # Проверка прав на запись
+    try:
+        if not os.path.exists(APPOINTMENTS_FILE):
+            with open(APPOINTMENTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+            print(f"✅ Файл {APPOINTMENTS_FILE} создан")
+        else:
+            with open(APPOINTMENTS_FILE, 'a', encoding='utf-8') as f:
+                pass
+            print(f"✅ Файл {APPOINTMENTS_FILE} доступен для записи")
+        
+        if not os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+            print(f"✅ Файл {USERS_FILE} создан")
+        
+    except PermissionError:
+        print(f"❌ Нет прав на запись в файлы")
+    except Exception as e:
+        print(f"⚠️ Предупреждение: {e}")
+    
     print("=" * 50)
     
-    # === ИНИЦИАЛИЗАЦИЯ ФАЙЛОВ ===
-    try:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        for file_path in [APPOINTMENTS_FILE, USERS_FILE]:
-            if not os.path.exists(file_path):
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump({}, f)
-        print("✅ Файлы готовы")
-    except:
-        pass
+    # Очистка старых записей
+    appointments = load_appointments()
+    today = datetime.now().strftime("%d.%m.%Y")
+    cleaned = False
     
-    # === ОЧИСТКА СТАРЫХ ЗАПИСЕЙ ===
-    try:
-        appointments = load_appointments()
-        today = datetime.now().strftime("%d.%m.%Y")
-        for date_str in list(appointments.keys()):
-            if date_str < today:
-                del appointments[date_str]
+    for date_str in list(appointments.keys()):
+        if date_str < today:
+            del appointments[date_str]
+            cleaned = True
+    
+    if cleaned:
         save_appointments(appointments)
-    except:
-        pass
+        print("🧹 Очищены старые записи")
     
-    # === ЗАПУСК ПЛАНИРОВЩИКА ===
+    print(f"👥 Пользователей в базе: {len(get_all_users())}")
+    
+    # Запуск планировщика
     reminder_thread = threading.Thread(target=run_scheduler, daemon=True)
     reminder_thread.start()
     
-    # === ПРОГРЕВ ЧАТОВ (тихо, без сообщений) ===
-    print("🔍 Прогрев чатов...")
-    users = get_all_users()
-    for user in users:
-        try:
-            # Отправляем невидимое действие "печатает", чтобы установить соединение
-            bot.send_chat_action(user['user_id'], 'typing')
-            time.sleep(0.05)
-        except:
-            pass
-    print(f"✅ Прогрето чатов: {len(users)}")
-    
-    # === ЗАПУСК БОТА ===
-    print("🚀 Запуск бота...")
-    
+    # Запуск бота
     while True:
         try:
+            print("🚀 Бот запущен!")
             bot.infinity_polling(timeout=10, long_polling_timeout=5)
         except Exception as e:
-            print(f"Ошибка: {e}")
+            print(f"❌ Ошибка: {e}")
+            print("🔄 Перезапуск через 5 секунд...")
             time.sleep(5)
