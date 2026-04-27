@@ -1529,100 +1529,42 @@ def run_scheduler():
 if __name__ == "__main__":
     print("=" * 50)
     print("🤖 БОТ ЗАПУСКАЕТСЯ...")
-    
-    # === ИНИЦИАЛИЗАЦИЯ ФАЙЛОВ ===
-    try:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        
-        for file_path in [APPOINTMENTS_FILE, USERS_FILE]:
-            if not os.path.exists(file_path):
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump({}, f)
-        
-        print(f"✅ Файлы данных готовы")
-    except Exception as e:
-        print(f"❌ Ошибка файлов: {e}")
-    
-    # === ОЧИСТКА СТАРЫХ ЗАПИСЕЙ ===
-    appointments = load_appointments()
-    today = datetime.now().strftime("%d.%m.%Y")
-    cleaned = False
-    
-    for date_str in list(appointments.keys()):
-        if date_str < today:
-            del appointments[date_str]
-            cleaned = True
-    
-    if cleaned:
-        save_appointments(appointments)
-    
-    print(f"👥 Пользователей: {len(get_all_users())}")
-    print(f"📅 Активных записей: {len(get_all_appointments())}")
     print(f"🕐 Часы работы: {WORK_START_HOUR}:00 - {WORK_END_HOUR}:00")
     print(f"👑 Админы: {ADMIN_IDS}")
     print("=" * 50)
     
+    # === ИНИЦИАЛИЗАЦИЯ ФАЙЛОВ ===
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        for file_path in [APPOINTMENTS_FILE, USERS_FILE]:
+            if not os.path.exists(file_path):
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump({}, f)
+        print("✅ Файлы готовы")
+    except:
+        pass
+    
+    # === ОЧИСТКА СТАРЫХ ЗАПИСЕЙ ===
+    try:
+        appointments = load_appointments()
+        today = datetime.now().strftime("%d.%m.%Y")
+        for date_str in list(appointments.keys()):
+            if date_str < today:
+                del appointments[date_str]
+        save_appointments(appointments)
+    except:
+        pass
+    
     # === ЗАПУСК ПЛАНИРОВЩИКА ===
     reminder_thread = threading.Thread(target=run_scheduler, daemon=True)
     reminder_thread.start()
-    time.sleep(0.5)
     
-    # === ПРИНУДИТЕЛЬНЫЙ ПРОГРЕВ СОЕДИНЕНИЯ ===
-    print("🔍 Установка соединения с Telegram...")
-    
-    # Удаляем вебхук и ждём
-    for attempt in range(3):
-        try:
-            bot.remove_webhook()
-            time.sleep(1)
-            break
-        except Exception as e:
-            print(f"⚠️ Попытка {attempt + 1}: {e}")
-            time.sleep(2)
-    
-    # Проверяем соединение
-    for attempt in range(3):
-        try:
-            me = bot.get_me()
-            print(f"✅ Бот @{me.username} подключён")
-            break
-        except Exception as e:
-            print(f"⚠️ Попытка {attempt + 1} проверки API: {e}")
-            time.sleep(2)
-    else:
-        print("❌ Не удалось подключиться к Telegram API")
-    
-    # === ДОПОЛНИТЕЛЬНАЯ ЗАДЕРЖКА ===
-    print("⏳ Ожидание 3 секунды для стабилизации...")
-    time.sleep(3)
-    
-    # === ЗАПУСК ===
-    print("🚀 Запуск polling...")
-    
-    # Счётчик перезапусков
-    restart_count = 0
+    # === ЗАПУСК БОТА ===
+    print("🚀 Запуск бота...")
     
     while True:
         try:
-            restart_count += 1
-            print(f"🔄 Polling цикл #{restart_count}")
-            bot.infinity_polling(timeout=10, long_polling_timeout=5, restart_on_change=False)
+            bot.polling(none_stop=False, timeout=30, long_polling_timeout=10)
         except Exception as e:
-            error_msg = str(e)
-            print(f"❌ Ошибка polling (цикл #{restart_count}): {error_msg[:200]}")
-            
-            # Если ошибка критическая - ждём дольше
-            if "401" in error_msg or "Unauthorized" in error_msg:
-                print("🔴 Критическая ошибка авторизации. Проверьте токен!")
-                time.sleep(60)
-            elif "409" in error_msg or "Conflict" in error_msg:
-                print("🟡 Конфликт соединений. Сброс webhook...")
-                try:
-                    bot.remove_webhook()
-                    time.sleep(2)
-                except:
-                    pass
-            else:
-                print(f"🔄 Перезапуск через 3 секунды...")
-            
-            time.sleep(3)
+            print(f"Ошибка: {e}")
+            time.sleep(5)
