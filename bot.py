@@ -1559,12 +1559,24 @@ if __name__ == "__main__":
     reminder_thread = threading.Thread(target=run_scheduler, daemon=True)
     reminder_thread.start()
     
+    # === ПРОГРЕВ ЧАТОВ (тихо, без сообщений) ===
+    print("🔍 Прогрев чатов...")
+    users = get_all_users()
+    for user in users:
+        try:
+            # Отправляем невидимое действие "печатает", чтобы установить соединение
+            bot.send_chat_action(user['user_id'], 'typing')
+            time.sleep(0.05)
+        except:
+            pass
+    print(f"✅ Прогрето чатов: {len(users)}")
+    
     # === ЗАПУСК БОТА ===
     print("🚀 Запуск бота...")
     
     while True:
         try:
-            bot.polling(none_stop=False, timeout=30, long_polling_timeout=10)
+            bot.infinity_polling(timeout=10, long_polling_timeout=5)
         except Exception as e:
             print(f"Ошибка: {e}")
             time.sleep(5)
