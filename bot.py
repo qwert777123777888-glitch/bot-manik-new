@@ -754,8 +754,8 @@ def time_slot_selected(call):
     # Запрашиваем имя
     msg = bot.send_message(
         call.message.chat.id,
-        "📝 *Введите ваше имя:*\n\n"
-        "Например: Анна",
+        "📝 *Введите ваше имя и услугу одним сообщением:*\n\n"
+        "Например: Анна (Покрытие)",
         reply_markup=cancel_keyboard(),
         parse_mode="Markdown"
     )
@@ -788,7 +788,7 @@ def process_name(message):
     msg = bot.send_message(
         message.chat.id,
         "📱 *Введите номер телефона:*\n\n"
-        "В формате: +7 (999) 123-45-67\n"
+        "В формате: +7 (999) 999-99-99\n"
         "Или нажмите кнопку ниже для автоматической отправки",
         reply_markup=phone_keyboard(),
         parse_mode="Markdown"
@@ -818,7 +818,7 @@ def process_phone(message):
         msg = bot.send_message(
             message.chat.id,
             "❌ Некорректный номер телефона.\n"
-            "Пожалуйста, введите в формате: +7 (999) 123-45-67\n"
+            "Пожалуйста, введите в формате: +7 (999) 999-99-99\n"
             "Или нажмите кнопку «📱 Отправить номер телефона»",
             reply_markup=phone_keyboard()
         )
@@ -1458,9 +1458,10 @@ def contact_received(message):
 # ==================== СИСТЕМА НАПОМИНАНИЙ ====================
 
 def check_reminders():
-    """Проверка и отправка напоминаний"""
+    """Проверка и отправка напоминаний + автоудаление старых записей"""
     now = datetime.now()
     appointments = load_appointments()
+    modified = False
     
     for date_str in list(appointments.keys()):
         for time_str in list(appointments[date_str].keys()):
@@ -1472,6 +1473,15 @@ def check_reminders():
                 continue
             
             time_diff = app_datetime - now
+            
+            # Если запись была более 20 минут назад — удаляем
+            if time_diff < timedelta(minutes=-20):
+                del appointments[date_str][time_str]
+                if not appointments[date_str]:
+                    del appointments[date_str]
+                modified = True
+                continue
+            
             client_name = data.get('client_name', 'Клиент')
             
             # Напоминание за день
@@ -1492,7 +1502,7 @@ def check_reminders():
                         except:
                             pass
                     data['reminded_day'] = True
-                    save_appointments(appointments)
+                    modified = True
             
             # Напоминание за час
             if REMINDER_HOUR_BEFORE and not data.get('reminded_hour'):
@@ -1513,7 +1523,10 @@ def check_reminders():
                         except:
                             pass
                     data['reminded_hour'] = True
-                    save_appointments(appointments)
+                    modified = True
+    
+    if modified:
+        save_appointments(appointments)
 
 def run_scheduler():
     """Запуск планировщика"""
